@@ -2,7 +2,7 @@
  * Change this one constant when the Google Apps Script Web App URL changes.
  * The value must be the deployed Web App URL ending in /exec.
  */
-const API_URL = "https://script.google.com/macros/s/REPLACE_WITH_YOUR_SCRIPT_ID/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwNOsfHvOQxbVInNMgGJvb_Fi7O6G6DydHrQ76UnRIuKMzSn1c_tkG4yjL-UsWXZi3I/exec";
 
 const JSONP_TIMEOUT_MS = 12000;
 const QR_CODE_MIN_LENGTH = 4;
