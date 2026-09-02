@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1769e0" />
+    <meta
+      name="description"
+      content="2026 하반기 보수교육 직원용 출석 QR 스캐너"
+    />
+    <title>보수교육 출석 스캐너</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+    <script
+      src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+      defer
+    ></script>
+    <script src="./js/app.js" defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="page-header">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" role="presentation">
+              <path d="M4 4h9v9H4zM19 4h9v9h-9zM4 19h9v9H4z" />
+              <path d="M19 19h4v4h-4zM25 19h3v9h-3zM19 25h4v3h-4z" />
+            </svg>
+          </div>
+          <div>
+            <p class="eyebrow">2026 하반기 보수교육</p>
+            <h1>직원용 출석 스캐너</h1>
+          </div>
+        </div>
+        <span class="secure-badge">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3 5 6v5c0 4.6 2.9 8.8 7 10 4.1-1.2 7-5.4 7-10V6l-7-3Z" />
+            <path d="m9.3 12 1.8 1.8 3.8-4" />
+          </svg>
+          직원 인증
+        </span>
+      </header>
+
+      <section class="intro-card card">
+        <div>
+          <p class="eyebrow blue">빠르고 간편한 출석 확인</p>
+          <h2>QR을 스캔해 출석을 등록하세요</h2>
+          <p class="intro-copy">
+            직원 PIN을 입력한 뒤 카메라를 허용하면 출석 QR을 실시간으로 인식합니다.
+          </p>
+        </div>
+        <div class="step-list" aria-label="출석 등록 순서">
+          <span><b>1</b> PIN 입력</span>
+          <span><b>2</b> QR 스캔</span>
+          <span><b>3</b> 결과 확인</span>
+        </div>
+      </section>
+
+      <section class="card pin-card" aria-labelledby="pin-title">
+        <div class="section-heading">
+          <div class="section-number">01</div>
+          <div>
+            <h2 id="pin-title">직원 PIN</h2>
+            <p>출석 등록에 사용할 PIN을 입력하세요.</p>
+          </div>
+        </div>
+        <form id="pin-form" class="pin-form" novalidate>
+          <label class="field-label" for="pin-input">PIN 번호</label>
+          <div class="pin-input-row">
+            <input
+              id="pin-input"
+              name="pin"
+              type="password"
+              inputmode="numeric"
+              autocomplete="off"
+              pattern="[0-9]*"
+              maxlength="20"
+              placeholder="PIN 입력"
+              required
+            />
+            <button id="toggle-pin" class="icon-button" type="button" aria-label="PIN 표시">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                <circle cx="12" cy="12" r="2.5" />
+              </svg>
+            </button>
+          </div>
+          <p class="field-hint">PIN은 출석 요청에만 사용되며 이 기기에 저장되지 않습니다.</p>
+          <div class="pin-actions">
+            <button id="start-camera" class="button button-primary" type="submit">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h3l1.5-2h7L17 7h3v12H4V7Z" />
+                <circle cx="12" cy="13" r="3.5" />
+              </svg>
+              카메라 시작
+            </button>
+            <button id="stop-camera" class="button button-secondary" type="button" disabled>
+              스캔 중지
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card scanner-card" aria-labelledby="scanner-title">
+        <div class="section-heading">
+          <div class="section-number">02</div>
+          <div>
+            <h2 id="scanner-title">QR 스캔</h2>
+            <p>출석 QR을 카메라 안의 파란 영역에 맞춰주세요.</p>
+          </div>
+        </div>
+
+        <div id="reader" class="reader" aria-label="QR 코드 카메라 영역">
+          <div class="reader-placeholder">
+            <div class="placeholder-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M4 7h3l1.5-2h7L17 7h3v12H4V7Z" />
+                <circle cx="12" cy="13" r="3.5" />
+              </svg>
+            </div>
+            <p>PIN 입력 후 카메라를 시작하세요.</p>
+          </div>
+        </div>
+        <p class="camera-note">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
+            <path d="M12 10v6M12 7.3v.1" />
+          </svg>
+          카메라 권한을 허용해야 스캔할 수 있습니다. iPhone에서는 Safari의 카메라 권한을 확인하세요.
+        </p>
+      </section>
+
+      <section class="card manual-card" aria-labelledby="manual-title">
+        <div class="section-heading compact">
+          <div class="section-number">03</div>
+          <div>
+            <h2 id="manual-title">출석ID 직접 입력</h2>
+            <p>카메라를 사용할 수 없을 때 출석ID를 입력하세요.</p>
+          </div>
+        </div>
+        <form id="manual-form" class="manual-form" novalidate>
+          <label class="field-label" for="attendance-id">출석ID</label>
+          <div class="manual-input-row">
+            <input
+              id="attendance-id"
+              name="attendanceId"
+              type="text"
+              autocapitalize="characters"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="32"
+              placeholder="예: K8F3Q2P1"
+              required
+            />
+            <button class="button button-primary" type="submit">출석 등록</button>
+          </div>
+          <p class="field-hint">출석ID는 영문 대문자와 숫자 4~32자로 입력하세요.</p>
+        </form>
+      </section>
+
+      <section id="status-card" class="status-card" aria-live="polite" aria-atomic="true">
+        <div class="status-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+            <circle cx="12" cy="12" r="3.5" />
+          </svg>
+        </div>
+        <div>
+          <h2 id="status-title">준비되었습니다</h2>
+          <p id="status-message">PIN 입력 후 카메라를 시작하거나 출석ID를 직접 입력하세요.</p>
+        </div>
+      </section>
+
+      <section id="result-card" class="card result-card" aria-labelledby="result-title" hidden>
+        <div class="result-banner">
+          <div class="result-check" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="m5 12 4.2 4.2L19 6.5" /></svg>
+          </div>
+          <div>
+            <p class="eyebrow blue">출석 등록 완료</p>
+            <h2 id="result-title">출석 정보</h2>
+          </div>
+        </div>
+        <dl class="result-details">
+          <div>
+            <dt>이름</dt>
+            <dd id="result-name">-</dd>
+          </div>
+          <div>
+            <dt>지역</dt>
+            <dd id="result-region">-</dd>
+          </div>
+          <div>
+            <dt>센터</dt>
+            <dd id="result-center">-</dd>
+          </div>
+          <div>
+            <dt>출석시간</dt>
+            <dd id="result-time">-</dd>
+          </div>
+        </dl>
+        <button id="scan-another" class="button button-secondary full-width" type="button">
+          다른 출석ID 스캔하기
+        </button>
+      </section>
+
+      <footer class="page-footer">출석 등록에 문제가 있으면 교육 담당자에게 문의하세요.</footer>
+    </main>
+  </body>
+</html>
