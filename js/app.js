@@ -5,6 +5,8 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbwNOsfHvOQxbVInNMgGJvb_Fi7O6G6DydHrQ76UnRIuKMzSn1c_tkG4yjL-UsWXZi3I/exec";
 
 const JSONP_TIMEOUT_MS = 12000;
+const RESULT_DISPLAY_MS = 1300;
+const SAME_QR_COOLDOWN_MS = 3000;
 const QR_CODE_MIN_LENGTH = 4;
 const QR_CODE_MAX_LENGTH = 32;
 
@@ -25,20 +27,20 @@ const elements = {
   resultRegion: document.querySelector("#result-region"),
   resultCenter: document.querySelector("#result-center"),
   resultTime: document.querySelector("#result-time"),
-  scanAnother: document.querySelector("#scan-another"),
 };
 
 let scanner = null;
 let isScannerRunning = false;
+let isStartingScanner = false;
 let isSubmitting = false;
-let hasHandledScan = false;
+let feedbackTimerId = null;
+const recentScanCodes = new Map();
 
 document.addEventListener("DOMContentLoaded", () => {
   elements.pinForm.addEventListener("submit", handlePinSubmit);
   elements.stopCamera.addEventListener("click", () => stopScanner());
   elements.manualForm.addEventListener("submit", handleManualSubmit);
   elements.togglePin.addEventListener("click", togglePinVisibility);
-  elements.scanAnother.addEventListener("click", prepareForAnotherScan);
   elements.pinInput.addEventListener("input", updateControlState);
   window.addEventListener("pagehide", () => stopScanner({ silent: true }));
   updateControlState();
@@ -99,12 +101,12 @@ async function handleManualSubmit(event) {
     return;
   }
 
-  await stopScanner({ silent: true });
+  rememberScanCode(attendanceId);
   await submitAttendance(attendanceId, pin, "manual");
 }
 
 async function startScanner() {
-  if (isScannerRunning || isSubmitting) return;
+  if (isScannerRunning || isStartingScanner || isSubmitting) return;
 
   if (
     typeof window.Html5Qrcode !== "function" ||
@@ -119,7 +121,8 @@ async function startScanner() {
     return;
   }
 
-  hasHandledScan = false;
+  isStartingScanner = true;
+  clearFeedbackTimer();
   elements.resultCard.hidden = true;
   showStatus("loading", "카메라를 준비하는 중입니다", "브라우저의 카메라 권한 요청이 나타나면 허용해 주세요.");
   updateControlState();
@@ -130,31 +133,34 @@ async function startScanner() {
   ];
   let lastError = null;
 
-  for (const cameraConfig of cameraConfigs) {
-    let nextScanner = null;
+  try {
+    for (const cameraConfig of cameraConfigs) {
+      let nextScanner = null;
 
-    try {
-      nextScanner = createScanner();
-      await nextScanner.start(cameraConfig, getScannerConfig(), handleScanSuccess, handleScanError);
-      scanner = nextScanner;
-      isScannerRunning = true;
-      showStatus("loading", "QR을 스캔하는 중입니다", "출석 QR을 파란 가이드 안에 맞춰주세요.");
-      updateControlState();
-      return;
-    } catch (error) {
-      lastError = error;
-      if (nextScanner) {
-        try {
-          await nextScanner.clear();
-        } catch {
-          // The scanner may not have created a video element when start() failed.
+      try {
+        nextScanner = createScanner();
+        await nextScanner.start(cameraConfig, getScannerConfig(), handleScanSuccess, handleScanError);
+        scanner = nextScanner;
+        isScannerRunning = true;
+        showReadyStatus();
+        return;
+      } catch (error) {
+        lastError = error;
+        if (nextScanner) {
+          try {
+            await nextScanner.clear();
+          } catch {
+            // The scanner may not have created a video element when start() failed.
+          }
         }
       }
     }
-  }
 
-  showStatus("error", "카메라를 시작할 수 없습니다", getCameraErrorMessage(lastError));
-  updateControlState();
+    showStatus("error", "카메라를 시작할 수 없습니다", getCameraErrorMessage(lastError));
+  } finally {
+    isStartingScanner = false;
+    updateControlState();
+  }
 }
 
 function createScanner() {
@@ -178,9 +184,24 @@ function getScannerConfig() {
 }
 
 function handleScanSuccess(decodedText) {
-  if (hasHandledScan || isSubmitting) return;
-  hasHandledScan = true;
-  void processScanResult(decodedText);
+  if (isSubmitting) return;
+
+  const scanCode = normalizeScanCode(decodedText);
+  if (!scanCode || isScanCodeOnCooldown(scanCode)) return;
+
+  rememberScanCode(scanCode);
+  const attendanceId = normalizeAttendanceId(scanCode);
+
+  if (!attendanceId) {
+    showTransientStatus(
+      "error",
+      "올바른 출석 QR이 아닙니다",
+      `QR에는 영문 대문자와 숫자로 된 출석ID(${QR_CODE_MIN_LENGTH}~${QR_CODE_MAX_LENGTH}자)가 있어야 합니다.`,
+    );
+    return;
+  }
+
+  void processScanResult(attendanceId);
 }
 
 function handleScanError() {
@@ -190,23 +211,9 @@ function handleScanError() {
 
 async function processScanResult(decodedText) {
   const attendanceId = normalizeAttendanceId(decodedText);
-
-  await stopScanner({ silent: true });
-
-  if (!attendanceId) {
-    hasHandledScan = false;
-    showStatus(
-      "error",
-      "올바른 출석 QR이 아닙니다",
-      `QR에는 영문 대문자와 숫자로 된 출석ID(${QR_CODE_MIN_LENGTH}~${QR_CODE_MAX_LENGTH}자)가 있어야 합니다.`,
-    );
-    return;
-  }
-
   const pin = getPin();
   if (!pin) {
-    hasHandledScan = false;
-    showStatus("warning", "PIN을 입력해 주세요", "QR은 인식했지만 출석 등록에는 직원 PIN이 필요합니다.");
+    showTransientStatus("warning", "PIN을 입력해 주세요", "QR은 인식했지만 출석 등록에는 직원 PIN이 필요합니다.");
     elements.pinInput.focus();
     return;
   }
@@ -235,13 +242,15 @@ async function stopScanner(options = {}) {
   }
 
   if (!silent && !isSubmitting) {
-    showStatus("neutral", "스캔을 중지했습니다", "카메라를 다시 시작하거나 출석ID를 직접 입력하세요.");
+    showStatus("neutral", "카메라를 중지했습니다", "다시 사용하려면 PIN을 확인하고 카메라 시작을 눌러주세요.");
   }
 }
 
 async function submitAttendance(attendanceId, pin, source) {
   if (isSubmitting) return;
 
+  clearFeedbackTimer();
+  elements.resultCard.hidden = true;
   isSubmitting = true;
   updateControlState();
   showStatus(
@@ -258,6 +267,7 @@ async function submitAttendance(attendanceId, pin, source) {
   } finally {
     isSubmitting = false;
     updateControlState();
+    scheduleReadyStatus();
   }
 }
 
@@ -344,7 +354,6 @@ function renderAttendanceResponse(rawResponse, attendanceId) {
   );
   elements.resultCard.hidden = false;
   showStatus("success", "출석이 완료되었습니다", `${attendanceId} 출석 등록이 정상적으로 처리되었습니다.`);
-  elements.resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function normalizeResponse(rawResponse) {
@@ -400,6 +409,26 @@ function normalizeAttendanceId(value) {
   return pattern.test(normalized) ? normalized : "";
 }
 
+function normalizeScanCode(value) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function isScanCodeOnCooldown(scanCode) {
+  const expiresAt = recentScanCodes.get(scanCode);
+  if (!expiresAt) return false;
+  if (expiresAt > Date.now()) return true;
+  recentScanCodes.delete(scanCode);
+  return false;
+}
+
+function rememberScanCode(scanCode) {
+  const now = Date.now();
+  for (const [knownCode, expiresAt] of recentScanCodes) {
+    if (expiresAt <= now) recentScanCodes.delete(knownCode);
+  }
+  recentScanCodes.set(scanCode, now + SAME_QR_COOLDOWN_MS);
+}
+
 function getPin() {
   return String(elements.pinInput.value ?? "").trim();
 }
@@ -414,17 +443,41 @@ function togglePinVisibility() {
   elements.togglePin.setAttribute("aria-label", isPassword ? "PIN 숨기기" : "PIN 표시");
 }
 
-function prepareForAnotherScan() {
+function showReadyStatus() {
+  if (isScannerRunning) {
+    showStatus("neutral", "다음 교육생 QR을 스캔해주세요", "카메라는 계속 실행 중입니다. QR을 가이드 안에 맞춰주세요.");
+    return;
+  }
+
+  showStatus("neutral", "준비되었습니다", "PIN 입력 후 카메라를 시작하거나 출석ID를 직접 입력하세요.");
+}
+
+function showTransientStatus(kind, title, message) {
+  clearFeedbackTimer();
   elements.resultCard.hidden = true;
-  elements.attendanceId.value = "";
-  hasHandledScan = false;
-  showStatus("neutral", "다음 출석을 준비했습니다", "카메라를 시작하거나 출석ID를 직접 입력하세요.");
-  elements.manualForm.scrollIntoView({ behavior: "smooth", block: "center" });
+  showStatus(kind, title, message);
+  scheduleReadyStatus();
+}
+
+function scheduleReadyStatus() {
+  clearFeedbackTimer();
+  feedbackTimerId = window.setTimeout(() => {
+    feedbackTimerId = null;
+    elements.resultCard.hidden = true;
+    elements.attendanceId.value = "";
+    showReadyStatus();
+  }, RESULT_DISPLAY_MS);
+}
+
+function clearFeedbackTimer() {
+  if (feedbackTimerId === null) return;
+  window.clearTimeout(feedbackTimerId);
+  feedbackTimerId = null;
 }
 
 function updateControlState() {
-  elements.startCamera.disabled = isScannerRunning || isSubmitting;
-  elements.stopCamera.disabled = !isScannerRunning || isSubmitting;
+  elements.startCamera.disabled = isScannerRunning || isStartingScanner || isSubmitting;
+  elements.stopCamera.disabled = !isScannerRunning;
   elements.pinInput.disabled = isSubmitting;
   elements.attendanceId.disabled = isSubmitting;
 }
