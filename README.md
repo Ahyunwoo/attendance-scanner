@@ -11,7 +11,7 @@
 - 동일 출석ID 3초 재스캔 방지 및 다른 출석ID 즉시 인식
 - 출석ID 직접 입력
 - Google Apps Script Web App API JSONP 호출
-- 출석 성공 시 이름, 지역, 센터, 출석시간 표시
+- 출석 성공 시 현재 회차명, 이름, 지역, 센터, 출석시간 표시
 - 중복 출석 및 API/카메라 오류 안내
 - 모바일 화면 최적화
 
@@ -45,11 +45,25 @@ const API_URL = "https://script.google.com/macros/s/발급받은_SCRIPT_ID/exec"
 | `pin` | 직원 PIN |
 | `callback` | JSONP 콜백 함수명 |
 
+프론트엔드는 `sessionId`를 저장하거나 선택하지 않으며, 회차 관련 파라미터도 전송하지 않습니다. QR 출석과 교육생 직접 출석은 반드시 Apps Script 서버의 동일한 회차 처리 로직을 사용해야 합니다. 이 저장소에는 Apps Script 서버 원본이 포함되어 있지 않으므로, 아래 계약을 실제 Web App `doGet(e)`에 반영해야 합니다.
+
+### Apps Script 회차 처리 계약
+
+Apps Script `doGet(e)`는 **매 출석 요청마다** `출석제어` 시트에서 현재 `OPEN` 상태인 회차를 조회하고, 그 회차의 `sessionId`와 `sessionName`을 출석 처리에 적용해야 합니다.
+
+- 요청에서 사용하는 입력값은 `action`, `attendanceId`, `pin`, `callback`입니다.
+- 클라이언트에서 전달되는 `sessionId`나 회차 선택값은 없으며, 서버가 현재 `OPEN` 회차를 결정합니다.
+- 중복 여부는 `sessionId + attendanceId` 조합으로 판단합니다.
+- 같은 교육생이 같은 회차에서 다시 요청하면 `duplicate: true`를 반환합니다.
+- 관리자가 새 회차를 `OPEN`으로 변경하면 다음 요청부터 새 `sessionId`에 기록합니다. 프론트엔드 수정, 재배포, 새로고침은 필요하지 않습니다.
+- 성공 응답에는 현재 회차명 `sessionName`을 포함해야 합니다.
+
 성공 응답의 예시는 다음과 같습니다.
 
 ```json
 {
   "success": true,
+  "sessionName": "1일차 오후",
   "name": "홍길동",
   "region": "서울",
   "center": "강남센터",
@@ -87,7 +101,7 @@ function doGet(e) {
 }
 ```
 
-실제 Apps Script에서는 `attendanceId`와 `pin`을 검증하고, 이미 출석한 직원이면 `duplicate: true`를 반환하도록 구현하세요. JSONP 특성상 PIN이 URL query string에 포함되므로 HTTPS를 사용하고 Apps Script 로그/프록시/분석 도구에 민감정보가 남지 않도록 운영 환경을 확인해야 합니다.
+실제 Apps Script에서는 `출석제어` 시트의 현재 `OPEN` 회차를 매 요청마다 읽고, `attendanceId`와 `pin`을 검증한 뒤 `sessionId + attendanceId`로 중복을 판단해야 합니다. 현재 `OPEN` 회차가 없으면 명확한 오류 응답을 반환하세요. JSONP 특성상 PIN이 URL query string에 포함되므로 HTTPS를 사용하고 Apps Script 로그/프록시/분석 도구에 민감정보가 남지 않도록 운영 환경을 확인해야 합니다.
 
 ## GitHub Pages 활성화
 
