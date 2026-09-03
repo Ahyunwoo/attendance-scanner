@@ -23,6 +23,7 @@ const elements = {
   statusTitle: document.querySelector("#status-title"),
   statusMessage: document.querySelector("#status-message"),
   resultCard: document.querySelector("#result-card"),
+  resultSession: document.querySelector("#result-session"),
   resultName: document.querySelector("#result-name"),
   resultRegion: document.querySelector("#result-region"),
   resultCenter: document.querySelector("#result-center"),
@@ -345,6 +346,7 @@ function renderAttendanceResponse(rawResponse, attendanceId) {
     return;
   }
 
+  setText(elements.resultSession, getResponseValue(response, ["sessionName", "session_name", "currentSessionName", "current_session_name"]));
   setText(elements.resultName, getResponseValue(response, ["name", "employeeName", "employee_name"]));
   setText(elements.resultRegion, getResponseValue(response, ["region", "area", "district"]));
   setText(elements.resultCenter, getResponseValue(response, ["center", "centerName", "center_name"]));
